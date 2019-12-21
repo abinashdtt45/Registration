@@ -5,8 +5,8 @@ var Razorpay = require('razorpay')
 const { mongoose } = require('./connect')
 const { User } = require('./user.js')
 var rzp = new Razorpay({
-    key_id: 'use your key',
-    key_secret: 'your secret test key'// need to change in payment.ejs
+    key_id: 'own_key',// need to change in payment.ejs
+    key_secret: 'own_secret'
 })
 
 if (typeof localStorage === "undefined" || localStorage === null) {
@@ -15,10 +15,10 @@ if (typeof localStorage === "undefined" || localStorage === null) {
 }
 
 const msg91sms = require('msg91-lib').msg91SMS;
-const msg91SMS = new msg91sms('own auth key', 'incand', 4, 91);
+const msg91SMS = new msg91sms('own_auth_key', 'incand', 4, 91);
 
 const sgMail = require('@sendgrid/mail');
-sgMail.setApiKey('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');
+sgMail.setApiKey('own_key');
 
 var app = express()
 
@@ -44,7 +44,7 @@ app.use(bodyParser.urlencoded({ extended: true }))
 // start of get request
 
 app.get('/register', (req, res) => {
-    res.render('register',{validate:1})
+    res.render('register', { validate: 1 })
 })
 
 app.get('/adminlogin', (req, res) => {
@@ -55,7 +55,7 @@ app.get('/payment', (req, res) => {
     name = req.query.name
     phone = req.query.phonenumber
     email = req.query.email
-    
+
     localStorage.setItem('email', email)
     localStorage.setItem('name', name)
     localStorage.setItem('number', phone)
@@ -64,8 +64,8 @@ app.get('/payment', (req, res) => {
 })
 
 app.get('/success', (req, res) => {
-    var name=localStorage.getItem("name")||req.query.name;
-    res.render('success', { name:name})
+    var name = localStorage.getItem("name") || req.query.name;
+    res.render('success', { name: name })
     console.log(localStorage.getItem("name"))
     localStorage.clear()
 })
@@ -78,25 +78,23 @@ app.get('/admin', (req, res) => {
 
 //Start of post request
 //to valididate email id
-function fun1(req,res,next){
+function fun1(req, res, next) {
     var email = req.body.email
     var pos = email.indexOf('@')
 
-    if(pos == -1)
-    {
-        res.render('register',{validate:0})
+    if (pos == -1) {
+        res.render('register', { validate: 0 })
     }
-    else{
-        if(email.slice(pos+1,email.length)=="gmail.com" || email.slice(pos+1,email.length)=="yahoo.com")
-        {
+    else {
+        if (email.slice(pos + 1, email.length) == "gmail.com" || email.slice(pos + 1, email.length) == "yahoo.com") {
             next()
-        }else{
-            res.render('register',{validate:0})
+        } else {
+            res.render('register', { validate: 0 })
         }
     }
 }
 
-app.post('/register',fun1, (req, res) => {
+app.post('/register', fun1, (req, res) => {
     college_id = req.body.college
     if (college_id == "1") {
         phone = req.body.number
@@ -143,51 +141,56 @@ app.post('/pay', (req, res) => {
         name: name,
         email: email,
         fail_existing: '0'
-      }).then((data) => {
-         console.log(data)
-      
-      rzp.orders.create({amount:amount, currency:"INR", receipt:data.id}).then((data) => {
-      
-        console.log("Order Details: ");
-        console.log(data);
-        console.log(data.id)
-        var orderID = data.id;
-        rzp.payments.capture(req.body.razorpay_payment_id, amount).then((data) => {
-        // success
-        new User({
-            name: name,
-            email: email,
-            institute: "Others",
-            phonenumber: phone
-        }).save().then((user) => {
-            console.log(user)
-            res.redirect('/success')
-        })
-        console.log("Payment Captured Successfully: ")
+    }).then((data) => {
         console.log(data)
-      
-      })
-      }).catch((error) => {
-        // error
-        console.log("Payment Capture error: ")
-        console.log(error)
-        res.redirect('/register')
-      })
-      
-      }).catch((error) => {
+        rzp.orders.create({ amount: amount, currency: "INR", receipt: data.id }).then((order) => {
+            console.log("Order Details: ");
+            console.log(order);
+            console.log(order.id)
+            var orderID = order.id;
+            rzp.payments.fetch(req.body.razorpay_payment_id).then((response) => {
+                console.log("Payment Instance")
+                console.log(response)
+                rzp.payments.capture(req.body.razorpay_payment_id, response.amount).then((capture) => {
+                    new User({
+                        name: name,
+                        email: email,
+                        institute: "Others",
+                        phonenumber: phone
+                    }).save().then((user) => {
+                        console.log(user)
+                        res.redirect('/success')
+                    })
+                    console.log("Payment Captured Successfully: ")
+                    console.log(capture)
+                }).catch((error) => {
+                    console.log("Failed to capture payment")
+                    console.log(error)
+                })
+            }).catch((error) => {
+                console.log("failed to fetch payment")
+                console.log(response)
+            })
+        }).catch((error) => {
+            //error
+            console.log("Order creation error")
+            console.log(error)
+            res.redirect('/register')
+        })
+    }).catch((error) => {
         // error
         console.log("Customer Create Error: ");
         console.log(error);
         res.redirect('/register')
-      })
-      
+    })
+
 })
 
 
-app.post('/send',(req, res)=>{
-    message= req.body.message
-    User.find().then((users)=>{
-        users.map((user)=>{
+app.post('/send', (req, res) => {
+    message = req.body.message
+    User.find().then((users) => {
+        users.map((user) => {
             string = user.phonenumber
             phnumber = string
             console.log(phnumber)
@@ -196,23 +199,23 @@ app.post('/send',(req, res)=>{
                 from: 'incand@gmail.com',
                 subject: 'Incandescence News Update',
                 text: message,
-                
-              };
-              msg.to = user.email
-              sgMail.send(msg);
+
+            };
+            msg.to = user.email
+            sgMail.send(msg);
 
             smsobj = [{
-                "message" : message,
-                "to" : [phnumber]
+                "message": message,
+                "to": [phnumber]
             }]
 
-            args = {sender: 'incand', sms: smsobj}
+            args = { sender: 'incand', sms: smsobj }
 
-            msg91SMS.send(args).then((res)=>{
+            msg91SMS.send(args).then((res) => {
                 console.log(res)
-            }).catch((e)=>{
+            }).catch((e) => {
                 console.log(e)
-                if(e.data) console.log(e.data)
+                if (e.data) console.log(e.data)
                 else console.log(e.message)
             })
             console.log('success')
@@ -224,26 +227,6 @@ app.post('/send',(req, res)=>{
 
 
 //End of post request
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
